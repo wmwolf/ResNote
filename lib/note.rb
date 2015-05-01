@@ -3,8 +3,10 @@ require 'FileUtils'
 require 'YAML'
 
 class Note
-  @save_dir = File.join(ENV['HOME'], 'Dropbox', 'Research_Journal')
-  @base_dir = File.join(@save_dir, 'base')
+  @notes_dir = File.join(ENV['HOME'], 'Dropbox', 'Research_Journal', 'Notes')
+  @projects_dir = File.join(ENV['HOME'],'Dropbox','Research_Journal','Projects')
+  @tags_dir = File.join(ENV['HOME'], 'Dropbox', 'Research_Journal', 'Tags')
+  @base_dir = File.join(@notes_dir, 'base')
   @base_suffix = '.tex'
   @base_file = File.join('base', @base_suffix)
   @base_extras = []
@@ -15,8 +17,8 @@ class Note
     'REPLACE_YEAR_CREATED'
   ]
   class << self
-    attr_accessor :save_dir, :base_suffix, :base_file, :base_extras, 
-      :prefs_loaded
+    attr_accessor :notes_dir, :projects_dir, :tags_dir, :base_suffix, 
+      :base_file, :base_extras, :prefs_loaded
   end
 
   def self.create_note_file(name)
@@ -33,12 +35,16 @@ class Note
   end
 
   def self.note_dir(name)
-    File.join(save_dir, name)
+    File.join(notes_dir, name)
   end
 
   def self.load_preferences
-    prefs = YAML.load(ENV['HOME'], '.ResNote', 'defaults.yml')
-    save_dir ||= prefs['save_dir']
+    pref_file = File.join(ENV['HOME'], '.ResNote', 'prefs.yml')
+    return unless File.exist?(pref_file)
+    prefs = YAML.load(IO.read(pref_file))
+    notes_dir ||= prefs['notes_dir']
+    projects_dir ||= prefs['projects_dir']
+    tags_dir ||= prefs['tags_dir']
     base_dir ||= prefs['base_dir']
     base_suffix ||= prefs['base_suffix']
     base_file ||= prefs['base_file']
@@ -53,20 +59,23 @@ class Note
     Note.load_preferences unless Note.prefs_loaded
     @date_created = Date.today
     @project = project
+    @project.add_note(self)
     @name = "#{date_created}_#{project}"
-    @dir = File.join(Note.save_dir, name)
+    @dir = File.join(Note.notes_dir, name)
     @tags = []
     @file = nil
   end
 
   def add_tag(new_tag)
-    @tags << new_tag
+    @tags << new_tag unless tags.include?(new_tag)
+    new_tag.add_note(self)
     update_record if file
     self
   end
 
   def remove_tag(tag)
     @tags.delete(tag)
+    tag.remove_note(self)
     update_record if file
     self
   end
@@ -82,7 +91,7 @@ class Note
       "tags" => tags,
     }
     yml_data = YAML.dump(metadata)
-    File.open(File.join(dir, "metadata.yml")) { |f| f.puts(yml_data) }
+    File.open(File.join(dir, "metadata.yml"), 'w') { |f| f.puts yml_data }
     self
   end
 
@@ -91,5 +100,10 @@ class Note
     base_contents = IO.read(file)
     update_record
   end
+
+  def delete
+    tags.each { |tag| tag.remove_note(self) }
+    project.remove_note(self)
+    FileUtils.rm_r dir
 end
 
