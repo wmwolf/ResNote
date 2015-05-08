@@ -41,6 +41,11 @@ class Project
     @dir_made = false
   end
 
+  def set_created_date(new_date)
+    @created_date = new_date
+    self
+  end
+
   def add_note(new_note)
     @notes << new_note unless @notes.include?(new_note)
     update_record if @dir_made

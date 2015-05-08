@@ -41,9 +41,15 @@ class Note
     new_file = "#{name}.#{base_suffix}"
     FileUtils.mkdir_p new_dir
     # copy base file over
-    FileUtils.cp File.join(base_dir, base_file), File.join(new_dir, new_file)
+    unless File.exist?(File.join(new_dir, new_file))
+      FileUtils.cp File.join(base_dir, base_file), File.join(new_dir, new_file)
+    end
     # copy extra files over
-    base_extras.each { |extra| FileUtils.cp File.join(base_dir, extra) new_dir }
+    base_extras.each do |extra| 
+      unless File.exist?(File.join(new_dir, extra))
+        FileUtils.cp File.join(base_dir, extra) new_dir
+      end
+    end
     File.join(new_dir, new_file)
   end
 
@@ -65,18 +71,37 @@ class Note
     prefs_loaded = true
   end
 
+  def self.load(name)
+    this_dir = note_dir(name)
+    raise("no note found: #{name}") unless Dir.exist?(this_dir)
+    metadata = YML.load(File.join(this_dir, "metadata.yml"))
+    new_note = Note.new(metadata['project'])
+    new_note.set_date_created metadata['date_created']
+    raise("no note file found: #{new_note.name}") unless new_note.check_for_file
+    metadata['tags'].each { |tag| new_note.add_tag(tag) }
+    new_note
+  end
 
-  attr_reader :date_created, :project, :dir, :name
+
+  attr_reader :date_created, :project, :dir
   attr_accessor :tags, :file
   def initialize(project)
     Note.load_preferences unless Note.prefs_loaded
     @date_created = Date.today
     @project = project
     @project.add_note(self)
-    @name = "#{date_created}_#{project}"
     @dir = File.join(Note.notes_dir, name)
     @tags = []
     @file = nil
+  end
+
+  def name
+    "#{date_created}_#{project}"
+  end
+
+  def set_date_created(new_date)
+    @date_created = new_date
+    self
   end
 
   def add_tag(new_tag)
@@ -115,6 +140,10 @@ class Note
     File.open(self.file, 'w') { |f| f.puts(base_contents) }
     update_record
     self
+  end
+
+  def check_for_file
+    return File.exist?(File.join(Note.note_dir, name))
   end
 
   def delete
