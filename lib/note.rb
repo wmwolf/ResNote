@@ -3,6 +3,20 @@ require 'FileUtils'
 require 'YAML'
 
 class Note
+  MONTHS = {
+    1 => "January",
+    2 => "February",
+    3 => "March",
+    4 => "April",
+    5 => "May",
+    6 => "June",
+    7 => "July",
+    8 => "August",
+    9 => "September",
+    10 => "October",
+    11 => "November",
+    12 => "December"
+  }
   @notes_dir = File.join(ENV['HOME'], 'Dropbox', 'Research_Journal', 'Notes')
   @projects_dir = File.join(ENV['HOME'],'Dropbox','Research_Journal','Projects')
   @tags_dir = File.join(ENV['HOME'], 'Dropbox', 'Research_Journal', 'Tags')
@@ -12,13 +26,13 @@ class Note
   @base_extras = []
   @prefs_loaded = false
   @to_replace = [
-    'REPLACE_DAY_CREATED',
-    'REPLACE_MONTH_CREATED',
-    'REPLACE_YEAR_CREATED'
+    ['REPLACE_DAY_CREATED', Date.today.day],
+    ['REPLACE_MONTH_CREATED', MONTHS[Date.today.month]],
+    ['REPLACE_YEAR_CREATED', Date.today.year]
   ]
   class << self
     attr_accessor :notes_dir, :projects_dir, :tags_dir, :base_suffix, 
-      :base_file, :base_extras, :prefs_loaded
+      :base_file, :base_extras, :prefs_loaded, :to_replace
   end
 
   def self.create_note_file(name)
@@ -27,8 +41,7 @@ class Note
     new_file = "#{name}.#{base_suffix}"
     FileUtils.mkdir_p new_dir
     # copy base file over
-    FileUtils.cp File.join(base_dir, base_file),
-      File.join(new_dir, new_file)
+    FileUtils.cp File.join(base_dir, base_file), File.join(new_dir, new_file)
     # copy extra files over
     base_extras.each { |extra| FileUtils.cp File.join(base_dir, extra) new_dir }
     File.join(new_dir, new_file)
@@ -98,12 +111,20 @@ class Note
   def create_file
     self.file = Note.create_note_file(name)
     base_contents = IO.read(file)
+    Note.to_replace.each { |rep| base_contents.gsub!(rep[0], rep[1]) }
+    File.open(self.file, 'w') { |f| f.puts(base_contents) }
     update_record
+    self
   end
 
   def delete
     tags.each { |tag| tag.remove_note(self) }
     project.remove_note(self)
     FileUtils.rm_r dir
+  end
+
+  def open
+    system("#{ENV['EDITOR']} #{file}")
+  end
 end
 
